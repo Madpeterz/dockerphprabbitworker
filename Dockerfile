@@ -17,4 +17,18 @@ ENV RABBITMQ_HOST='' \
     USE_SECOND_LIFE_BATCHING=false \
     RECOVERY_WAIT_TIME=30
 
+# Install Composer and make vendor
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+RUN composer install \
+    --no-interaction \
+    --no-plugins \
+    --no-scripts \
+    --no-dev
+
+# Setup entry points
+RUN apt-get update \
+    && apt-get clean    
+
+# swap cmd to the worker
 CMD ["php", "-d", "src/worker.php"]
