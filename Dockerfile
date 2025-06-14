@@ -1,11 +1,21 @@
-FROM madpeter/phpapachepreload:php82
+# Install Composer and make vendor
+# Use the official Composer image as the first stage
+FROM composer:1.9.3 AS composer
 
-MAINTAINER Madpeter
+# Use the official PHP image as the second stage
+FROM php:8.2.12
 
-COPY --chown=www-data:www-data . /srv/website
-COPY .docker/vhost.conf /etc/apache2/sites-available/000-default.conf
+# Copy the Composer PHAR from the Composer image into the PHP image
+COPY --from=composer /usr/bin/composer /usr/bin/composer
 
-WORKDIR /srv/website
+# Verify that both Composer and PHP are working
+RUN composer --version && php -v
+
+RUN composer install \
+    --no-interaction \
+    --no-plugins \
+    --no-scripts \
+    --no-dev
 
 ENV RABBITMQ_HOST='' \
     RABBITMQ_PORT=5672 \
@@ -16,15 +26,6 @@ ENV RABBITMQ_HOST='' \
     ENABLE_ECHO_OUTPUT=false \
     USE_SECOND_LIFE_BATCHING=false \
     RECOVERY_WAIT_TIME=30
-
-# Install Composer and make vendor
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-
-RUN composer install \
-    --no-interaction \
-    --no-plugins \
-    --no-scripts \
-    --no-dev
 
 # Setup entry points
 RUN apt-get update \
