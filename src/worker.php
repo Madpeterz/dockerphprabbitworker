@@ -77,7 +77,7 @@ function logMessage($message): void
         echo $message . "\n";
     }
 }
-logMessage("Starting worker...");
+echo "Starting worker...";
 while (true) {
     try {
         logMessage("Connecting to RabbitMQ at {$GLOBALS['rabbitMQHost']}:{$GLOBALS['rabbitMQPort']}...");
@@ -124,3 +124,4 @@ while (true) {
         continue;
     }
 }
+echo "exiting worker...";

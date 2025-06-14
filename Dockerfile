@@ -5,22 +5,19 @@ FROM composer:1.9.3 AS composer
 # Use the official PHP image as the second stage
 FROM php:8.2.12
 
-# Copy the Composer PHAR from the Composer image into the PHP image
-COPY --from=composer /usr/bin/composer /usr/bin/composer
-
 # Verify that both Composer and PHP are working
 RUN composer --version && php -v
 
-WORKDIR /app/
-COPY composer.* ./
+WORKDIR /
+COPY composer.json ./composer.json
+COPY src/worker.php ./src/worker.php
+COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 RUN composer install \
     --no-interaction \
     --no-plugins \
     --no-scripts \
     --no-dev
-
-COPY --from=composer /app/vendor /var/www/vendor
 
 ENV RABBITMQ_HOST='' \
     RABBITMQ_PORT=5672 \
@@ -37,4 +34,4 @@ RUN apt-get update \
     && apt-get clean    
 
 # swap cmd to the worker
-CMD ["php", "-d", "/app/src/worker.php"]
+CMD ["php", "src/worker.php"]
