@@ -5,10 +5,27 @@ FROM composer:1.9.3 AS composer
 # Use the official PHP image as the second stage
 FROM php:8.2.12
 
-WORKDIR /
-COPY composer.json ./composer.json
-COPY src/worker.php ./src/worker.php
+COPY . /srv/worker
 COPY --from=composer /usr/bin/composer /usr/bin/composer
+
+WORKDIR /srv/worker
+
+# Install necessary packages / Install PHP extensions which depend on external libraries
+RUN \
+    apt-get update \
+    && echo 'adding SSL + zip support + curl' \
+    && apt-get install -y openssl \
+    && apt-get install -y zlib1g-dev \
+    && apt-get install -y libzip-dev \
+    && apt-get install -y unzip \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libssl-dev libcurl4-openssl-dev \
+    && docker-php-ext-configure curl --with-curl \
+    && docker-php-ext-install zip \
+    && docker-php-ext-install curl \
+    && docker-php-ext-install zip \
+    && apt-get update \
+    && apt-get clean
 
 # Verify that both Composer and PHP are working
 RUN composer --version && php -v
