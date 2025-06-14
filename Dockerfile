@@ -1,7 +1,3 @@
-# Install Composer and make vendor
-# Use the official Composer image as the first stage
-FROM composer:1.9.3 AS composer
-
 # Use the official PHP image as the second stage
 FROM php:8.2.12
 
@@ -27,8 +23,8 @@ RUN \
     && apt-get update \
     && apt-get clean
 
-# Verify that both Composer and PHP are working
-RUN composer --version && php -v
+# Install Composer and make vendor
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 RUN composer install \
     --no-interaction \
