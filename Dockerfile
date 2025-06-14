@@ -5,13 +5,13 @@ FROM composer:1.9.3 AS composer
 # Use the official PHP image as the second stage
 FROM php:8.2.12
 
-# Verify that both Composer and PHP are working
-RUN composer --version && php -v
-
 WORKDIR /
 COPY composer.json ./composer.json
 COPY src/worker.php ./src/worker.php
 COPY --from=composer /usr/bin/composer /usr/bin/composer
+
+# Verify that both Composer and PHP are working
+RUN composer --version && php -v
 
 RUN composer install \
     --no-interaction \
