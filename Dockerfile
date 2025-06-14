@@ -10,7 +10,7 @@ COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 # Verify that both Composer and PHP are working
 RUN composer --version && php -v
-
+COPY composer.* ./
 RUN composer install \
     --no-interaction \
     --no-plugins \
