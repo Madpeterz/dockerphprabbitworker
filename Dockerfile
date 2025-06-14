@@ -26,5 +26,5 @@ RUN composer install \
     --no-scripts \
     --no-dev
 
-run php -d src/worker.php
+CMD ["php", "-d", "src/worker.php"]
 
