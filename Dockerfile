@@ -10,12 +10,17 @@ COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 # Verify that both Composer and PHP are working
 RUN composer --version && php -v
+
+WORKDIR /app/
 COPY composer.* ./
+
 RUN composer install \
     --no-interaction \
     --no-plugins \
     --no-scripts \
     --no-dev
+
+COPY --from=composer /app/vendor /var/www/vendor
 
 ENV RABBITMQ_HOST='' \
     RABBITMQ_PORT=5672 \
@@ -32,4 +37,4 @@ RUN apt-get update \
     && apt-get clean    
 
 # swap cmd to the worker
-CMD ["php", "-d", "src/worker.php"]
+CMD ["php", "-d", "/app/src/worker.php"]
