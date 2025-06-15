@@ -23,50 +23,64 @@ $useSecondlifeBatching = $_ENV['USE_SECOND_LIFE_BATCHING'] ?? false;
 $recoveryWaitTime = $_ENV['RECOVERY_WAIT_TIME'] ?? 30; // seconds
 
 $secondlifeUrlLastSeen = []; // url => unixtime
-$guzzle = new Client();
 
 $processMessageFunction = function (AMQPMessage $message): void {
     global $secondlifeUrlLastSeen, $useSecondlifeBatching, $guzzle;
-    $body = json_decode($message->getBody(), true);
-    // formating checks
-    $requiredKeys = ['url', 'unixtime', 'method', 'data'];
-    if (is_array($body) && array_diff($requiredKeys, array_keys($body))) {
-        logMessage("Invalid message format: missing required keys");
-        return;
-    }
-    // secondlife batching
-    if ($useSecondlifeBatching == true) {
-        if (array_key_exists($body['url'], $secondlifeUrlLastSeen)) {
-            if ($secondlifeUrlLastSeen[$body['url']] < (time() + 1)) {
-                logMessage("Skipping message for URL: {$body['url']} due to recent processing");
-                return;
+
+    try {
+        $body = json_decode($message->getBody(), true);
+        // formating checks
+        $requiredKeys = ['url', 'unixtime', 'method', 'data'];
+        if (is_array($body) && array_diff($requiredKeys, array_keys($body))) {
+            logMessage("Invalid message format: missing required keys");
+            return;
+        }
+        // secondlife batching
+        if ($useSecondlifeBatching == true) {
+            if (array_key_exists($body['url'], $secondlifeUrlLastSeen)) {
+                if ($secondlifeUrlLastSeen[$body['url']] < (time() + 1)) {
+                    logMessage("Skipping message for URL: {$body['url']} due to recent processing");
+                    return;
+                }
+            }
+            $secondlifeUrlLastSeen[$body['url']] = time();
+        }
+        // delete message from queue
+        $message->ack();
+        // process message
+        logMessage("Processing message: " . json_encode($body));
+        $data = json_decode($body['data'], true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            logMessage("JSON decoding error: " . json_last_error_msg());
+            return;
+        }
+        if (is_array($data) == false) {
+            logMessage("Data is not an array skipping message");
+            return;
+        }
+
+        if ($body["method"] == "GET") {
+            $guzzle->get($body['url'], ['query' => $data]);
+        } elseif ($body["method"] == "POST") {
+            $guzzle->post($body['url'], ['form_params' => $data]);
+        } else {
+            logMessage("Unsupported method: {$body['method']}");
+            return;
+        }
+        // cleanup seen urls to prevent memory leaks
+        if ($useSecondlifeBatching == true) {
+            $toclean = [];
+            foreach ($secondlifeUrlLastSeen as $url => $lastSeen) {
+                if ($lastSeen < (time() - 5)) { // remove entries older than 60 seconds
+                    $toclean[] = $url;
+                }
+            }
+            foreach ($toclean as $url) {
+                unset($secondlifeUrlLastSeen[$url]);
             }
         }
-        $secondlifeUrlLastSeen[$body['url']] = time();
-    }
-    // delete message from queue
-    $message->ack();
-    // process message
-    logMessage("Processing message: " . json_encode($body));
-    if ($body["method"] == "GET") {
-        $guzzle->get($body['url'], ['query' => $body['data']]);
-    } elseif ($body["method"] == "POST") {
-        $guzzle->post($body['url'], ['form_params' => $body['data']]);
-    } else {
-        logMessage("Unsupported method: {$body['method']}");
-        return;
-    }
-    // cleanup seen urls to prevent memory leaks
-    if ($useSecondlifeBatching == true) {
-        $toclean = [];
-        foreach ($secondlifeUrlLastSeen as $url => $lastSeen) {
-            if ($lastSeen < (time() - 5)) { // remove entries older than 60 seconds
-                $toclean[] = $url;
-            }
-        }
-        foreach ($toclean as $url) {
-            unset($secondlifeUrlLastSeen[$url]);
-        }
+    } catch (\Exception $e) {
+        logMessage("Error processing message: " . $e->getMessage());
     }
 };
 
@@ -80,6 +94,7 @@ function logMessage($message): void
 echo "Starting worker...";
 while (true) {
     try {
+        $guzzle = new Client();
         logMessage("Connecting to RabbitMQ at {$GLOBALS['rabbitMQHost']}:{$GLOBALS['rabbitMQPort']}...");
         $connection = new AMQPStreamConnection(
             $rabbitMQHost,
