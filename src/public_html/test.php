@@ -7,10 +7,8 @@ require_once '../../vendor/autoload.php';
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Message\AMQPMessage;
 
-if (isset($_POST['host']) && isset($_POST['data'])) {
+if (isset($_POST['host'])) {
     $host = $_POST['host'];
-    $data = $_POST['data'];
-
     $rabbitMQHost = $_ENV['RABBITMQ_HOST'] ?? 'localhost';
     $rabbitMQPort = $_ENV['RABBITMQ_PORT'] ?? '5672';
     $rabbitMQUser = $_ENV['RABBITMQ_USER'] ?? 'guest';
@@ -25,11 +23,11 @@ if (isset($_POST['host']) && isset($_POST['data'])) {
         $rabbitMQPassword
     );
     $channel = $connection->channel();
-
+    $data = json_encode(["dog" => "bark", "cat" => "meow"]);
     $blob = [
         'url' => $host,
         'unixtime' => time(),
-        'method' => 'POST',
+        'method' => 'GET',
         'data' => $data,
     ];
     // Declare a queue
@@ -50,7 +48,6 @@ if (isset($_POST['host']) && isset($_POST['data'])) {
 ?>
 
 <form method="post" action="http://localhost/test.php">
-    <input type="text" name="host" placeholder="host url">
-    <input type="text" name="data" placeholder="what to send">      
+    <input type="text" name="host" placeholder="host url">  
     <button type="submit">Send Message</button>
 </form>
