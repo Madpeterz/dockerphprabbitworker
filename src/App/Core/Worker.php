@@ -93,7 +93,7 @@ class Worker
         }
     }
 
-    protected function processMessage(AMQPMessage $message): void
+    public function processMessage(AMQPMessage $message): void
     {
         if ($this->messageChecks($message) === false) {
             return;
@@ -103,7 +103,6 @@ class Worker
         }
         // delete message from queue
         $message->ack();
-        $message->nack();
         if ($this->checkMessageAge($message) === false) {
             $this->logMessage("Message is too old or malformed, skipping");
             return;
@@ -166,9 +165,9 @@ class Worker
             if ($this->secondlifeUrlLastSeen[$body['url']] >= (time() + 1)) {
                 return true;
             }
-            $this->logMessage("Skipping message for URL: {" .
-            $body['url'] . "} due to recent processing");
-            return false;
+            $this->logMessage("waiting for 1 sec to allow SL to not be shit");
+            sleep(1);
+            return true;
         } catch (\Exception $e) {
             $this->logMessage("Error in secondlifeBatching: " . $e->getMessage());
             return false;
@@ -214,9 +213,7 @@ class Worker
                 nowait: false,
                 arguments: null,
             );
-            $callback = function (AMQPMessage $message): void {
-                $this->processMessage($message);
-            };
+            $this->logMessage("Queue declared successfully");
             $this->channel->basic_consume(
                 queue: $this->rabbitMQQueue,
                 consumer_tag: '',
@@ -224,7 +221,7 @@ class Worker
                 no_ack: false,
                 exclusive: false,
                 nowait: false,
-                callback: $callback
+                callback: [$this, 'processMessage']
             );
             $this->logMessage("Consumer registered successfully");
             while ($this->channel->is_consuming()) {
