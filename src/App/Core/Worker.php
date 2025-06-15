@@ -74,14 +74,30 @@ class Worker
                 $this->logMessage("JSON decoding error: " . json_last_error_msg());
                 return false;
             }
-            if (is_array($data) == false) {
-                $this->logMessage("Data is not an array skipping message");
-                return false;
-            }
             if ($body["method"] == "GET") {
+                if (is_array($data) == false) {
+                    $this->logMessage("Data is not an array skipping message");
+                    return false;
+                }
                 $this->guzzle->get($body['url'], ['query' => $data]);
                 return true;
             } elseif ($body["method"] == "POST") {
+                if ($body["useBody"]) {
+                    $options = [
+                        "body" => (!is_string($data) ? json_encode($data) : $data),
+                        'headers' => ['Content-type' => 'application/json'],
+                        "verify" => false,
+                        "timeout" => 10,
+                        "read_timeout" => 10,
+                        "connect_timeout" => 5,
+                    ];
+                    $this->guzzle->post($body['url'], $options);
+                    return true;
+                }
+                if (is_array($data) == false) {
+                    $this->logMessage("Data is not an array skipping message");
+                    return false;
+                }
                 $this->guzzle->post($body['url'], ['form_params' => $data]);
                 return true;
             }
@@ -179,7 +195,7 @@ class Worker
         // formating checks
         try {
             $body = json_decode($message->getBody(), true);
-            $requiredKeys = ['url', 'unixtime', 'method', 'data'];
+            $requiredKeys = ['url', 'unixtime', 'method', 'data', 'useBody'];
             if (is_array($body) && array_diff($requiredKeys, array_keys($body))) {
                 $this->logMessage("Invalid message format: missing required keys");
                 return false;
