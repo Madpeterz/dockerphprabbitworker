@@ -69,10 +69,12 @@ class Worker
             // send message out
             $body = json_decode($message->getBody(), true);
             $this->logMessage("Processing message: " . json_encode($body));
-            $data = json_decode($body['data'], true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                $this->logMessage("JSON decoding error: " . json_last_error_msg());
-                return false;
+            if(is_string($body['data'])){
+                $data = json_decode($body['data'], true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $this->logMessage("JSON decoding error: " . json_last_error_msg());
+                    return false;
+                }
             }
             if ($body["method"] == "GET") {
                 if (is_array($data) == false) {
