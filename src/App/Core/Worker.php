@@ -69,6 +69,7 @@ class Worker
             // send message out
             $body = json_decode($message->getBody(), true);
             $this->logMessage("Processing message: " . json_encode($body));
+            $data = $body['data'];
             if(is_string($body['data'])){
                 $data = json_decode($body['data'], true);
                 if (json_last_error() !== JSON_ERROR_NONE) {
