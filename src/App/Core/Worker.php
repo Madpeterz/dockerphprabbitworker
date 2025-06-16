@@ -16,7 +16,7 @@ class Worker
     protected string $rabbitMQPassword;
     protected string $rabbitMQQueue;
     protected string $rabbitMQvHost;
-    protected bool $enableEchoOutput;
+    protected bool $enableEchoOutput = true;
     protected bool $useSecondlifeBatching;
     protected int $recoveryWaitTime;
     protected Client $guzzle;
