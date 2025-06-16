@@ -34,8 +34,7 @@ ENV RABBITMQ_HOST='' \
     RECOVERY_WAIT_TIME=30 \
     HEARTBEAT_QUEUE='heartbeat' \
     HEARTBEAT_INTERVAL=0.2 \
-    PING_PONG_QUEUE='ping_pong' \
-
+    PING_PONG_QUEUE='ping_pong'
 
 # Setup entry points
 RUN apt-get update \
