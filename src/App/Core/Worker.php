@@ -21,8 +21,13 @@ class Worker
     protected int $recoveryWaitTime;
     protected Client $guzzle;
     protected AMQPStreamConnection $connection;
-    protected AMQPChannel $channel;
+    protected AMQPChannel $taskChannel = null;
+    protected AMQPChannel $heartBeatChannel = null;
+    protected AMQPChannel $pingPongChannel = null;
     protected array $secondlifeUrlLastSeen = [];
+    protected string $heartBeatQueueName;
+    protected float $heartBeatQueueInterval;
+    protected string $pingPongQueueName;
 
     public function __construct()
     {
@@ -37,6 +42,9 @@ class Worker
         $this->enableEchoOutput = $input->envInput("ENABLE_ECHO_OUTPUT")->asBool(true);
         $this->useSecondlifeBatching = $input->envInput("USE_SECOND_LIFE_BATCHING")->asBool(false);
         $this->recoveryWaitTime = $input->envInput("RECOVERY_WAIT_TIME")->asInt(30);
+        $this->heartBeatQueueName = $input->envInput("HEARTBEAT_QUEUE")->asString('heartbeat');
+        $this->heartBeatQueueInterval = $input->envInput("HEARTBEAT_INTERVAL")->asFloat(0.2);
+        $this->pingPongQueueName = $input->envInput("PING_PONG_QUEUE")->asString('ping_pong');
         $this->logMessage("Worker initialized with settings: " .
             json_encode([
                 'rabbitMQHost' => $this->rabbitMQHost,
@@ -120,8 +128,25 @@ class Worker
         }
     }
 
+    protected function makeChannel(string $queueName, bool $autoDelete = false): AMQPChannel
+    {
+        $workChannel = $this->connection->channel();
+        $this->logMessage("Declaring queue: " . $queueName);
+        $workChannel->queue_declare(
+            queue: $queueName,
+            passive: false,
+            durable: true,
+            exclusive: false,
+            auto_delete: $autoDelete,
+            nowait: false,
+            arguments: null,
+        );
+        return $workChannel;
+    }
+
     public function processMessage(AMQPMessage $message): void
     {
+        $this->heartBeat();
         if (!$this->messageChecks($message)) {
             return;
         }
@@ -212,6 +237,41 @@ class Worker
         }
     }
 
+    protected float $lastHeartBeatTime = 0;
+    protected function heartBeat(): void
+    {
+        if ($this->heartBeatChannel === null) {
+            $this->heartBeatChannel = $this->makeChannel($this->heartBeatQueueName, true);
+        }
+        $this->logMessage("Sending heartbeat");
+        if ((microtime(true) - $this->lastHeartBeatTime) < $this->heartBeatQueueInterval) {
+            return; // Avoid sending heartbeats too frequently
+        }
+        $this->lastHeartBeatTime = microtime(true);
+        $this->heartBeatChannel->queue_purge(
+            queue: $this->heartBeatQueueName,
+            nowait: false,
+        );
+        $msg = new AMQPMessage(json_encode(["time" => microtime(true),"random" => rand(0, 10000)]));
+        $this->heartBeatChannel->basic_publish($msg, '', $this->heartBeatQueueName);
+    }
+
+    protected function pingPong(): void
+    {
+        if ($this->pingPongChannel === null) {
+            $this->pingPongChannel = $this->makeChannel($this->pingPongQueueName, true);
+        }
+        $this->pingPongChannel->basic_consume(
+            queue: $this->pingPongQueueName,
+            consumer_tag: '',
+            no_local: false,
+            no_ack: true,
+            exclusive: false,
+            nowait: false,
+            callback: [$this, 'heartBeat']
+        );
+    }
+
     protected function makeConnection(): void
     {
         try {
@@ -223,19 +283,9 @@ class Worker
                 $this->rabbitMQvHost,
             );
             $this->logMessage("Connected");
-            $this->channel = $this->connection->channel();
-            $this->logMessage("Declaring queue: " . $this->rabbitMQQueue);
-            $this->channel->queue_declare(
-                queue: $this->rabbitMQQueue,
-                passive: false,
-                durable: true,
-                exclusive: false,
-                auto_delete: false,
-                nowait: false,
-                arguments: null,
-            );
+            $this->taskChannel = $this->makeChannel($this->rabbitMQQueue);
             $this->logMessage("Queue declared successfully");
-            $this->channel->basic_consume(
+            $this->taskChannel->basic_consume(
                 queue: $this->rabbitMQQueue,
                 consumer_tag: '',
                 no_local: false,
@@ -244,9 +294,10 @@ class Worker
                 nowait: false,
                 callback: [$this, 'processMessage']
             );
+            $this->heartBeat();
             $this->logMessage("Consumer registered successfully");
-            while ($this->channel->is_consuming()) {
-                $this->channel->wait();
+            while ($this->taskChannel->is_consuming()) {
+                $this->taskChannel->wait();
             }
             $this->logMessage("Dropping from waiting");
         } catch (\Exception $e) {
