@@ -7,13 +7,13 @@ require_once '../../vendor/autoload.php';
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Message\AMQPMessage;
 
-if (isset($_POST['host'])) {
-    $host = $_POST['host'];
-    $rabbitMQHost = $_ENV['RABBITMQ_HOST'] ?? 'localhost';
-    $rabbitMQPort = $_ENV['RABBITMQ_PORT'] ?? '5672';
-    $rabbitMQUser = $_ENV['RABBITMQ_USER'] ?? 'guest';
-    $rabbitMQPassword = $_ENV['RABBITMQ_PASSWORD'] ?? 'guest';
-    $rabbitMQQueue = $_ENV['RABBITMQ_QUEUE'] ?? 'default_queue';
+function sendMessageToQ(string $qname,string $message)
+{
+    $rabbitMQHost = 'localhost';
+    $rabbitMQPort = '5672';
+    $rabbitMQUser = 'guest';
+    $rabbitMQPassword =  'guest';
+    $rabbitMQQueue = $qname ?? 'default_queue';
 
     // Create a new AMQP connection
     $connection = new AMQPStreamConnection(
@@ -23,31 +23,34 @@ if (isset($_POST['host'])) {
         $rabbitMQPassword
     );
     $channel = $connection->channel();
-    $data = json_encode(["dog" => "bark", "cat" => "meow"]);
-    $blob = [
-        'url' => $host,
-        'unixtime' => time(),
-        'method' => 'GET',
-        'data' => $data,
-    ];
     // Declare a queue
     $channel->queue_declare($rabbitMQQueue, false, true, false, false);
 
     // Create a new message
-    $msg = new AMQPMessage(json_encode($blob));
+    $msg = new AMQPMessage($message);
 
     // Publish the message to the queue
     $channel->basic_publish($msg, '', $rabbitMQQueue);
 
-    echo " [x] Sent '$data'\n";
+    echo " [x] Sent '$message'\n";
 
     // Close the channel and connection
     $channel->close();
     $connection->close();
 }
+
+if (isset($_POST['qname'])) {
+    sendMessageToQ($_POST['qname'], $_POST['message']);
+}
 ?>
 
 <form method="post" action="http://localhost/test.php">
-    <input type="text" name="host" placeholder="host url">  
+    <select name="qname" placeholder="queue name">
+        <option value="notecards">notecards</option>
+        <option value="commands">commands</option>
+        <option value="ims">ims</option>
+        <option value="groupims">groupims</option>
+    </select>
+    <input type="text" name="message" placeholder="message">
     <button type="submit">Send Message</button>
 </form>
